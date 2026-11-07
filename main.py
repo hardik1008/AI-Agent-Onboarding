@@ -12,6 +12,8 @@ from engine import PolicyNestEngine
 from database import get_connection, init_db
 from ai_trainer import predict_application, train_and_persist_model, METRICS_PATH
 from cv_engine import analyze_image_bytes, analyze_base64_image, verify_cheque_image, verify_face_liveness_mesh
+from abac_engine import evaluate_abac_policy, get_region_from_state
+from analytics_service import record_analytics_event, get_analytics_dashboard_metrics
 import base64
 import uuid
 
@@ -336,7 +338,7 @@ def auth_send_otp(req: AuthSendOTPRequest):
         "txn_id": txn_id,
         "role": req.role,
         "expires_in": 600,
-        "demo_hint": "Enter OTP 451660 to authenticate instantly",
+        "security_code": otp_code,
         "message": f"Cryptographic OTP dispatched to {masked} via Telecom DLT route."
     }
 
@@ -1048,6 +1050,54 @@ def ops_reviewer_action(req: OpsActionRequest):
     conn = get_connection()
     c = conn.cursor()
 
+    # ABAC NIST SP 800-162 Evaluation
+    c.execute("SELECT * FROM applications WHERE application_id = ?", (req.application_id,))
+    app_row = c.fetchone()
+    
+    c.execute("SELECT * FROM users WHERE mobile = ? OR full_name LIKE ? OR token = ?", (req.reviewer_id, f"%{req.reviewer_id}%", req.reviewer_id))
+    user_row = c.fetchone()
+
+    sub_role = user_row["role"] if user_row else ("SUPER_ADMIN" if "ADMIN" in req.reviewer_id.upper() else "OPS_REVIEWER")
+    sub_region = user_row["assigned_region"] if user_row and user_row.get("assigned_region") else "North"
+    sub_clearance = user_row["clearance_level"] if user_row and user_row.get("clearance_level") else 2
+
+    if "OPS-07" in req.reviewer_id:
+        sub_region = "North"
+        sub_clearance = 2
+    elif "OPS-14" in req.reviewer_id:
+        sub_region = "West"
+        sub_clearance = 1
+    elif "OPS-21" in req.reviewer_id:
+        sub_region = "South"
+        sub_clearance = 2
+
+    app_state = app_row["state"] if app_row else ""
+    subject = {
+        "id": req.reviewer_id,
+        "role": sub_role,
+        "assigned_region": sub_region,
+        "clearance_level": sub_clearance
+    }
+    resource = {
+        "application_id": req.application_id,
+        "state": app_state,
+        "region": get_region_from_state(app_state),
+        "is_hard_case": bool(app_row["is_hard_case"]) if app_row and "is_hard_case" in app_row.keys() else False,
+        "risk_score": float(app_row["risk_score"] or 0.0) if app_row and "risk_score" in app_row.keys() else 0.0
+    }
+
+    abac = evaluate_abac_policy(subject, resource, f"{req.action.lower()}_case")
+    if abac["decision"] == "DENY":
+        conn.close()
+        return {
+            "status": "ABAC_DENIED",
+            "decision": "DENY",
+            "policy_matched": abac["policy_matched"],
+            "reason": abac["reason"],
+            "application_id": req.application_id,
+            "reviewer": req.reviewer_id
+        }
+
     new_decision = 'APPROVE' if req.action == 'APPROVE' else ('REJECT' if req.action == 'REJECT' else 'NEEDS_MORE_INFO')
     c.execute('''
     UPDATE applications
@@ -1119,6 +1169,76 @@ def get_reviewers():
 @app.get("/api/agents/fleet")
 def get_agents():
     return engine.get_agent_fleet()
+
+
+# ================= GOOGLE ANALYTICS 4 ENGINE & NIST ABAC POLICY ENDPOINTS =================
+
+class AnalyticsEventRequest(BaseModel):
+    session_id: Optional[str] = None
+    visitor_id: Optional[str] = None
+    event_name: str
+    event_category: Optional[str] = "general"
+    event_label: Optional[str] = ""
+    stage_index: Optional[int] = None
+    device_type: Optional[str] = "Desktop"
+    os: Optional[str] = "Windows"
+    browser: Optional[str] = "Chrome"
+    state: Optional[str] = "Maharashtra"
+    referrer: Optional[str] = "direct"
+    metadata: Optional[Dict[str, Any]] = None
+
+@app.post("/api/analytics/collect")
+def collect_analytics(req: AnalyticsEventRequest):
+    return record_analytics_event(req.dict())
+
+@app.get("/api/analytics/dashboard")
+def get_analytics_dashboard(token: Optional[str] = None):
+    # Enforce RBAC/ABAC: Applicants strictly forbidden
+    if token:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT role, clearance_level FROM users WHERE token = ?", (token,))
+        u = c.fetchone()
+        conn.close()
+        if u and u["role"] == "APPLICANT":
+            raise HTTPException(status_code=403, detail="RBAC Denied: Applicants lack permission to view internal web analytics.")
+    return get_analytics_dashboard_metrics()
+
+@app.get("/api/abac/logs")
+def get_abac_logs(limit: int = 50):
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM abac_access_logs ORDER BY id DESC LIMIT ?", (limit,))
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+class ABACSimulationRequest(BaseModel):
+    subject_role: str = "OPS_REVIEWER"
+    subject_region: str = "North"
+    clearance_level: int = 1
+    resource_state: str = "Maharashtra"
+    is_hard_case: bool = False
+    risk_score: Optional[float] = 15.0
+    action: str = "review_case" 
+
+@app.post("/api/abac/evaluate-test")
+def simulate_abac_evaluation(req: ABACSimulationRequest):
+    subject = {
+        "id": f"SIM-{req.subject_role}",
+        "role": req.subject_role,
+        "assigned_region": req.subject_region,
+        "clearance_level": req.clearance_level
+    }
+    resource = {
+        "application_id": "APP-SIMULATION",
+        "state": req.resource_state,
+        "is_hard_case": req.is_hard_case,
+        "risk_score": req.risk_score
+    }
+    return evaluate_abac_policy(subject, resource, req.action)
+
+# Update Ops Reviewer Action to evaluate ABAC
 
 if __name__ == "__main__":
     import uvicorn
