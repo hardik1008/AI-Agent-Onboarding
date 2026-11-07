@@ -9,7 +9,8 @@ POSP_APPS_PATH = r"C:\Users\vajja\Desktop\PS-01 AI-First Onboarding-20261029T130
 TEST_SET_PATH = r"C:\Users\vajja\Desktop\PS-01 AI-First Onboarding-20261029T130056Z-1-001\PS-01 AI-First Onboarding\Data\PS-01_document_review_test_set.xlsx"
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30.0, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL")
     conn.row_factory = sqlite3.Row
     return conn
 
