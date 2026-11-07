@@ -1,0 +1,119 @@
+{
+  "model_architecture": "Random Forest Ensemble (100 Decision Trees with Gini Impurity)",
+  "training_timestamp": "2026-11-05T23:40:42.580005",
+  "total_training_samples": 600,
+  "training_accuracy": 97.5,
+  "cv_accuracy_5fold_mean": 95.17,
+  "cv_scores": [
+    94.17,
+    95.0,
+    95.0,
+    95.0,
+    96.67
+  ],
+  "reject_recall": 100.0,
+  "needs_info_precision": 100.0,
+  "straight_through_rate": 5.17,
+  "classes": [
+    "APPROVE",
+    "NEEDS_MORE_INFO",
+    "REJECT"
+  ],
+  "confusion_matrix": {
+    "labels": [
+      "APPROVE",
+      "NEEDS_MORE_INFO",
+      "REJECT"
+    ],
+    "matrix": [
+      [
+        364,
+        0,
+        0
+      ],
+      [
+        15,
+        161,
+        0
+      ],
+      [
+        0,
+        0,
+        60
+      ]
+    ]
+  },
+  "feature_importances": [
+    {
+      "feature": "marksheet_has_fail_result",
+      "importance": 15.26,
+      "description": "IRDAI Rule 3.1 minimum educational qualification (10th pass)"
+    },
+    {
+      "feature": "name_rulebook_token_score",
+      "importance": 14.89,
+      "description": "Rulebook \u00a75 fuzzy name permutation score (exact, swap, initial)"
+    },
+    {
+      "feature": "min_ocr_confidence",
+      "importance": 13.86,
+      "description": "Lowest OCR confidence across all 6 submitted documents"
+    },
+    {
+      "feature": "avg_ocr_confidence",
+      "importance": 11.18,
+      "description": "Mean OCR confidence score across submitted documents"
+    },
+    {
+      "feature": "irdai_conflict_hit",
+      "importance": 10.32,
+      "description": "Central IIB Insurance Information Bureau exclusivity check"
+    },
+    {
+      "feature": "applicant_age",
+      "importance": 7.34,
+      "description": "Calculated chronological age as of reference audit date"
+    },
+    {
+      "feature": "biometric_face_match_score",
+      "importance": 6.6,
+      "description": "Cosine similarity between selfie face mesh and PAN photo"
+    },
+    {
+      "feature": "bank_penny_drop_name_score",
+      "importance": 6.55,
+      "description": "Jaccard token similarity between PAN name and NPCI bank beneficiary"
+    },
+    {
+      "feature": "pan_format_valid",
+      "importance": 5.46,
+      "description": "Income tax 10-character structure regex check (AAAAA9999A)"
+    },
+    {
+      "feature": "is_underage_flag",
+      "importance": 2.44,
+      "description": "IRDAI Rule 1.1 statutory minimum 18-year compliance gate"
+    },
+    {
+      "feature": "num_blurry_documents",
+      "importance": 2.14,
+      "description": "Count of documents with Laplacian blur variance below threshold"
+    },
+    {
+      "feature": "num_cropped_documents",
+      "importance": 1.51,
+      "description": "Count of documents with cropped borders or missing corners"
+    },
+    {
+      "feature": "pan_is_individual_p",
+      "importance": 1.24,
+      "description": "IRDAI Section 2 individual person check (4th character 'P')"
+    },
+    {
+      "feature": "num_glare_documents",
+      "importance": 1.21,
+      "description": "Count of documents with severe light reflection obscuring text"
+    }
+  ],
+  "status": "TRAINED_AND_DEPLOYED"
+}
