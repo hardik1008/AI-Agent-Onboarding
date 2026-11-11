@@ -1,0 +1,136 @@
+"use client";
+
+import clsx from "clsx";
+import { Gauge, KeyRound, LogOut, Menu, ScrollText, Server, ShieldCheck, UserCircle, Users, X } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { Logo } from "./Logo";
+import { Badge } from "./ui";
+import { VerificationBanner } from "./VerificationBanner";
+
+export interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  permission?: string;
+}
+
+export const NAV_ITEMS: NavItem[] = [
+  { href: "/app", label: "Overview", icon: Gauge },
+  { href: "/app/account", label: "Account & security", icon: UserCircle, permission: "profile:read" },
+  { href: "/app/admin/users", label: "Users", icon: Users, permission: "users:read" },
+  { href: "/app/admin/roles", label: "Roles & permissions", icon: KeyRound, permission: "roles:read" },
+  { href: "/app/admin/audit", label: "Audit log", icon: ScrollText, permission: "audit:read" },
+  { href: "/app/admin/system", label: "System status", icon: Server, permission: "system:read" },
+];
+
+export function visibleNav(permissions: string[]): NavItem[] {
+  return NAV_ITEMS.filter((i) => !i.permission || permissions.includes(i.permission));
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const { me, logout } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  if (!me) return null;
+  const items = visibleNav(me.permissions);
+
+  async function signOut() {
+    await logout();
+    router.replace("/login");
+  }
+
+  const nav = (
+    <nav className="flex flex-1 flex-col gap-1 px-3" aria-label="Main">
+      {items.map(({ href, label, icon: Icon }) => {
+        const active = href === "/app" ? pathname === "/app" : pathname.startsWith(href);
+        return (
+          <Link
+            key={href}
+            href={href}
+            onClick={() => setOpen(false)}
+            aria-current={active ? "page" : undefined}
+            className={clsx(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium",
+              active ? "bg-brand-50 text-brand-800" : "text-slate-700 hover:bg-slate-100",
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const userBlock = (
+    <div className="border-t border-slate-200 p-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+          {me.user.full_name
+            .split(" ")
+            .map((p) => p[0])
+            .slice(0, 2)
+            .join("")}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-slate-900">{me.user.full_name}</p>
+          <p className="truncate text-xs text-slate-500">{me.user.email}</p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between">
+        <Badge tone="brand">
+          <ShieldCheck className="mr-1 h-3 w-3" />
+          {me.user.role.name}
+        </Badge>
+        <button onClick={signOut} className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+          <LogOut className="h-4 w-4" /> Sign out
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen lg:pl-64">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-slate-200 bg-white lg:flex">
+        <div className="px-6 py-5">
+          <Link href="/app">
+            <Logo />
+          </Link>
+        </div>
+        {nav}
+        {userBlock}
+      </aside>
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+        <Link href="/app">
+          <Logo />
+        </Link>
+        <button onClick={() => setOpen(true)} className="rounded p-2 text-slate-700 hover:bg-slate-100" aria-label="Open menu">
+          <Menu className="h-5 w-5" />
+        </button>
+      </header>
+      {open && (
+        <div className="fixed inset-0 z-30 lg:hidden">
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setOpen(false)} aria-hidden />
+          <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-white">
+            <div className="flex items-center justify-between px-6 py-5">
+              <Logo />
+              <button onClick={() => setOpen(false)} className="rounded p-1 text-slate-600 hover:bg-slate-100" aria-label="Close menu">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {nav}
+            {userBlock}
+          </aside>
+        </div>
+      )}
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+        {!me.user.email_verified && <VerificationBanner />}
+        {children}
+      </main>
+    </div>
+  );
+}
