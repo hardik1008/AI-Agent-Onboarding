@@ -159,6 +159,24 @@ def test_password_reset_flow_revokes_sessions(make_client, mailbox):
     )
 
 
+def test_password_reset_invalidates_other_outstanding_links(client, mailbox):
+    from app.services.auth import PURPOSE_INVITE, issue_action_token
+
+    register(client)
+    with get_sessionmaker()() as db:
+        user = db.scalar(select(User).where(User.email == "asha@example.com"))
+        stale_invite = issue_action_token(db, user, PURPOSE_INVITE, timedelta(hours=72))
+        db.commit()
+    client.post("/api/v1/auth/forgot-password", json={"email": "asha@example.com"})
+    token = mailbox.last_token("asha@example.com")
+    assert (
+        client.post("/api/v1/auth/reset-password", json={"token": token, "password": "BrandNewPass2027"}).status_code
+        == 200
+    )
+    r = client.post("/api/v1/auth/reset-password", json={"token": stale_invite, "password": "HijackAttempt2029"})
+    assert r.json()["error"]["code"] == "TOKEN_USED"
+
+
 def test_expired_reset_token(client, mailbox):
     register(client)
     client.post("/api/v1/auth/forgot-password", json={"email": "asha@example.com"})

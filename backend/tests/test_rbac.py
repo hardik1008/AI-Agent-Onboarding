@@ -118,6 +118,7 @@ def test_admin_invites_staff_who_sets_password(make_client, mailbox):
     assert login(invited, "senior@policynest.in").status_code == 401
     token = mailbox.last_token("senior@policynest.in")
     assert invited.post("/api/v1/auth/check-token", json={"token": token}).json()["purpose"] == "INVITE"
+    assert f"/reset-password?token={token}" in mailbox.sent[-1].text
     assert (
         invited.post(
             "/api/v1/auth/reset-password", json={"token": token, "password": "Escalation#Desk2026"}

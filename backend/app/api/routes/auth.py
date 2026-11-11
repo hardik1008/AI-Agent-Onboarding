@@ -40,6 +40,7 @@ from app.services.auth import (
     clear_auth_cookies,
     consume_action_token,
     create_session,
+    invalidate_action_tokens,
     issue_action_token,
     latest_action_token,
     peek_action_token,
@@ -260,6 +261,7 @@ def reset_password(body: ResetPasswordRequest, request: Request, db: DB):
     if problems:
         raise _weak_password(problems)
     consume_action_token(db, body.token, {PURPOSE_PASSWORD_RESET, PURPOSE_INVITE})
+    invalidate_action_tokens(db, user.id, {PURPOSE_PASSWORD_RESET, PURPOSE_INVITE})
     now = utcnow()
     user.password_hash = hash_password(body.password)
     user.password_changed_at = now

@@ -123,5 +123,26 @@ def peek_action_token(db: Session, raw: str, purposes: set[str]) -> UserActionTo
 
 def consume_action_token(db: Session, raw: str, purposes: set[str]) -> UserActionToken:
     token = peek_action_token(db, raw, purposes)
-    token.used_at = utcnow()
+    claimed = db.execute(
+        update(UserActionToken)
+        .where(UserActionToken.id == token.id, UserActionToken.used_at.is_(None))
+        .values(used_at=utcnow())
+        .execution_options(synchronize_session=False)
+    ).rowcount
+    if claimed != 1:
+        raise AppError(400, "TOKEN_USED", "This link has already been used.")
+    db.expire(token, ["used_at"])
     return token
+
+
+def invalidate_action_tokens(db: Session, user_id, purposes: set[str]) -> None:
+    db.execute(
+        update(UserActionToken)
+        .where(
+            UserActionToken.user_id == user_id,
+            UserActionToken.purpose.in_(purposes),
+            UserActionToken.used_at.is_(None),
+        )
+        .values(used_at=utcnow())
+        .execution_options(synchronize_session=False)
+    )
