@@ -35,11 +35,11 @@ class Settings(BaseSettings):
 
     # Per-client-IP limits on unauthenticated auth endpoints: max requests per window.
     rate_limit_enabled: bool = True
-    rate_limit_window_seconds: int = 900
-    rate_limit_login: int = 30
-    rate_limit_register: int = 10
-    rate_limit_password_reset: int = 10
-    rate_limit_token: int = 30
+    rate_limit_window_seconds: int = Field(default=900, ge=1)
+    rate_limit_login: int = Field(default=30, ge=1)
+    rate_limit_register: int = Field(default=10, ge=1)
+    rate_limit_password_reset: int = Field(default=10, ge=1)
+    rate_limit_token: int = Field(default=30, ge=1)
 
     smtp_host: str | None = None
     smtp_port: int = 587

@@ -62,3 +62,14 @@ def test_fixed_window_resets():
     assert hit("unit", 2, 60, now=t0) == (1, 55)
     assert hit("unit", 2, 60, now=t0.replace(second=59)) == (2, 1)
     assert hit("unit", 2, 60, now=t0.replace(minute=1, second=0)) == (1, 60)
+
+
+@pytest.mark.parametrize("field", ["RATE_LIMIT_WINDOW_SECONDS", "RATE_LIMIT_LOGIN", "RATE_LIMIT_TOKEN"])
+def test_non_positive_rate_limit_settings_are_rejected(monkeypatch, field):
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    monkeypatch.setenv(field, "0")
+    with pytest.raises(ValidationError):
+        Settings()
