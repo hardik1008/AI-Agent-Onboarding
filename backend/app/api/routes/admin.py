@@ -58,12 +58,14 @@ def _role(db: DB, code: RoleCode) -> Role:
 
 
 def _active_admin_count(db: DB) -> int:
-    return (
-        db.scalar(
-            select(func.count()).select_from(User).join(Role).where(Role.code == RoleCode.ADMIN.value, User.is_active)
-        )
-        or 0
-    )
+    # Row locks serialise concurrent demotions/deactivations so the last-admin guard cannot be raced.
+    ids = db.scalars(
+        select(User.id)
+        .join(Role)
+        .where(Role.code == RoleCode.ADMIN.value, User.is_active)
+        .with_for_update(of=User)
+    ).all()
+    return len(ids)
 
 
 @router.get("/users", response_model=Page[AdminUserOut])
