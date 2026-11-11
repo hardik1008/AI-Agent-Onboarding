@@ -211,6 +211,19 @@ def test_change_password_and_session_management(make_client, mailbox):
     assert b.get("/api/v1/auth/me").status_code == 401
 
 
+def test_idle_sessions_not_listed_as_active(make_client):
+    a = make_client()
+    register(a)
+    b = make_client()
+    login(b, "asha@example.com")
+    with get_sessionmaker()() as db:
+        sessions = db.scalars(select(UserSession).order_by(UserSession.created_at)).all()
+        sessions[1].last_seen_at = utcnow() - timedelta(hours=5)
+        db.commit()
+    listed = a.get("/api/v1/auth/sessions").json()
+    assert len(listed) == 1 and listed[0]["current"]
+
+
 def test_cannot_revoke_another_users_session(make_client):
     a = make_client()
     register(a)

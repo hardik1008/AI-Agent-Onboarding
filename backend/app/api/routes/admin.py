@@ -27,7 +27,7 @@ from app.schemas.admin import (
 from app.schemas.auth import EmailDispatchResult
 from app.schemas.common import Page
 from app.services import audit
-from app.services.auth import PURPOSE_INVITE, issue_action_token, revoke_all_sessions
+from app.services.auth import PURPOSE_INVITE, issue_action_token, live_session_filter, revoke_all_sessions
 from app.services.email import get_provider, queue_email
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -60,10 +60,7 @@ def _role(db: DB, code: RoleCode) -> Role:
 def _active_admin_count(db: DB) -> int:
     # Row locks serialise concurrent demotions/deactivations so the last-admin guard cannot be raced.
     ids = db.scalars(
-        select(User.id)
-        .join(Role)
-        .where(Role.code == RoleCode.ADMIN.value, User.is_active)
-        .with_for_update(of=User)
+        select(User.id).join(Role).where(Role.code == RoleCode.ADMIN.value, User.is_active).with_for_update(of=User)
     ).all()
     return len(ids)
 
@@ -355,14 +352,7 @@ def admin_stats(db: DB, _: AuthContext = Depends(require_permission("users:read"
     def count(*where) -> int:
         return db.scalar(select(func.count()).select_from(User).where(*where)) or 0
 
-    active_sessions = (
-        db.scalar(
-            select(func.count())
-            .select_from(UserSession)
-            .where(UserSession.revoked_at.is_(None), UserSession.expires_at > now)
-        )
-        or 0
-    )
+    active_sessions = db.scalar(select(func.count()).select_from(UserSession).where(*live_session_filter(now))) or 0
     failed = (
         db.scalar(
             select(func.count())

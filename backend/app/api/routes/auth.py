@@ -43,6 +43,7 @@ from app.services.auth import (
     invalidate_action_tokens,
     issue_action_token,
     latest_action_token,
+    live_session_filter,
     peek_action_token,
     revoke_all_sessions,
     set_auth_cookies,
@@ -312,7 +313,7 @@ def list_sessions(db: DB, auth: AuthContext = Depends(require_permission("profil
     now = utcnow()
     rows = db.scalars(
         select(UserSession)
-        .where(UserSession.user_id == auth.user.id, UserSession.revoked_at.is_(None), UserSession.expires_at > now)
+        .where(UserSession.user_id == auth.user.id, *live_session_filter(now))
         .order_by(UserSession.last_seen_at.desc())
     ).all()
     out = []

@@ -69,6 +69,15 @@ def session_is_valid(session: UserSession, now: datetime | None = None) -> bool:
     return session.revoked_at is None and session.expires_at > now and now - session.last_seen_at <= idle_limit
 
 
+def live_session_filter(now: datetime):
+    idle_limit = timedelta(minutes=get_settings().session_idle_minutes)
+    return (
+        UserSession.revoked_at.is_(None),
+        UserSession.expires_at > now,
+        UserSession.last_seen_at >= now - idle_limit,
+    )
+
+
 def find_session(db: Session, raw_token: str) -> UserSession | None:
     return db.scalar(select(UserSession).where(UserSession.token_hash == hash_token(raw_token)))
 
