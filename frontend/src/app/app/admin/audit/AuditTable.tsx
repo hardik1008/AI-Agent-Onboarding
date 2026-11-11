@@ -11,7 +11,7 @@ export function AuditTable({ items, compact }: { items: AuditLog[]; compact?: bo
   const [open, setOpen] = useState<number | null>(null);
   if (items.length === 0) return <EmptyState title="No audit events match" />;
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>

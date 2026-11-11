@@ -46,7 +46,7 @@ function RolesView() {
       </div>
       <Card>
         <CardHeader title="Permission matrix" description="Administrators manage the platform but cannot decide applications (separation of duties)." />
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
