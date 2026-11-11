@@ -1,0 +1,127 @@
+from datetime import datetime, timedelta
+
+from fastapi import Request, Response
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.core.errors import AppError
+from app.core.request_context import client_ip, user_agent
+from app.core.security import generate_token, hash_token
+from app.models import User, UserActionToken, UserSession
+from app.models.base import utcnow
+
+PURPOSE_EMAIL_VERIFY = "EMAIL_VERIFY"
+PURPOSE_PASSWORD_RESET = "PASSWORD_RESET"
+PURPOSE_INVITE = "INVITE"
+
+
+def create_session(db: Session, user: User, request: Request) -> tuple[str, UserSession]:
+    s = get_settings()
+    raw = generate_token()
+    now = utcnow()
+    session = UserSession(
+        user_id=user.id,
+        token_hash=hash_token(raw),
+        csrf_token=generate_token(),
+        last_seen_at=now,
+        expires_at=now + timedelta(hours=s.session_absolute_hours),
+        ip_address=client_ip(request),
+        user_agent=user_agent(request),
+    )
+    db.add(session)
+    db.flush()
+    return raw, session
+
+
+def set_auth_cookies(response: Response, raw_token: str, session: UserSession) -> None:
+    s = get_settings()
+    max_age = int((session.expires_at - utcnow()).total_seconds())
+    response.set_cookie(
+        s.session_cookie_name,
+        raw_token,
+        max_age=max_age,
+        httponly=True,
+        secure=s.secure_cookies,
+        samesite="lax",
+        path="/",
+    )
+    response.set_cookie(
+        s.csrf_cookie_name,
+        session.csrf_token,
+        max_age=max_age,
+        httponly=False,
+        secure=s.secure_cookies,
+        samesite="lax",
+        path="/",
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    s = get_settings()
+    response.delete_cookie(s.session_cookie_name, path="/")
+    response.delete_cookie(s.csrf_cookie_name, path="/")
+
+
+def session_is_valid(session: UserSession, now: datetime | None = None) -> bool:
+    now = now or utcnow()
+    idle_limit = timedelta(minutes=get_settings().session_idle_minutes)
+    return session.revoked_at is None and session.expires_at > now and now - session.last_seen_at <= idle_limit
+
+
+def find_session(db: Session, raw_token: str) -> UserSession | None:
+    return db.scalar(select(UserSession).where(UserSession.token_hash == hash_token(raw_token)))
+
+
+def revoke_all_sessions(db: Session, user_id, except_session_id=None) -> int:
+    stmt = (
+        update(UserSession)
+        .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
+        .values(revoked_at=utcnow())
+    )
+    if except_session_id is not None:
+        stmt = stmt.where(UserSession.id != except_session_id)
+    return db.execute(stmt).rowcount or 0
+
+
+def issue_action_token(db: Session, user: User, purpose: str, ttl: timedelta) -> str:
+    db.execute(
+        update(UserActionToken)
+        .where(
+            UserActionToken.user_id == user.id,
+            UserActionToken.purpose == purpose,
+            UserActionToken.used_at.is_(None),
+        )
+        .values(used_at=utcnow())
+    )
+    raw = generate_token()
+    db.add(UserActionToken(user_id=user.id, purpose=purpose, token_hash=hash_token(raw), expires_at=utcnow() + ttl))
+    return raw
+
+
+def latest_action_token(db: Session, user: User, purpose: str) -> UserActionToken | None:
+    return db.scalar(
+        select(UserActionToken)
+        .where(UserActionToken.user_id == user.id, UserActionToken.purpose == purpose)
+        .order_by(UserActionToken.created_at.desc())
+        .limit(1)
+    )
+
+
+def peek_action_token(db: Session, raw: str, purposes: set[str]) -> UserActionToken:
+    token = db.scalar(select(UserActionToken).where(UserActionToken.token_hash == hash_token(raw)))
+    if token is None or token.purpose not in purposes:
+        raise AppError(400, "TOKEN_INVALID", "This link is invalid.")
+    if token.used_at is not None:
+        raise AppError(400, "TOKEN_USED", "This link has already been used.")
+    if token.expires_at <= utcnow():
+        raise AppError(400, "TOKEN_EXPIRED", "This link has expired. Request a new one.")
+    if not token.user.is_active:
+        raise AppError(400, "TOKEN_INVALID", "This link is invalid.")
+    return token
+
+
+def consume_action_token(db: Session, raw: str, purposes: set[str]) -> UserActionToken:
+    token = peek_action_token(db, raw, purposes)
+    token.used_at = utcnow()
+    return token
