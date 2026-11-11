@@ -83,6 +83,8 @@ def find_session(db: Session, raw_token: str) -> UserSession | None:
 
 
 def revoke_all_sessions(db: Session, user_id, except_session_id=None) -> int:
+    # Lock order is always user row, then session rows, so concurrent password/admin changes cannot deadlock.
+    db.execute(select(User.id).where(User.id == user_id).with_for_update())
     stmt = (
         update(UserSession)
         .where(UserSession.user_id == user_id, UserSession.revoked_at.is_(None))
