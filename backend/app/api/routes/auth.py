@@ -261,6 +261,8 @@ def reset_password(body: ResetPasswordRequest, request: Request, db: DB):
     problems = password_problems(body.password, user.email, user.full_name)
     if problems:
         raise _weak_password(problems)
+    # Serialise resets per user so claiming one link and invalidating the rest cannot deadlock.
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
     consume_action_token(db, body.token, {PURPOSE_PASSWORD_RESET, PURPOSE_INVITE})
     invalidate_action_tokens(db, user.id, {PURPOSE_PASSWORD_RESET, PURPOSE_INVITE})
     now = utcnow()
