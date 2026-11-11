@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     invite_ttl_hours: int = 72
     email_resend_cooldown_seconds: int = 60
 
+    # Per-client-IP limits on unauthenticated auth endpoints: max requests per window.
+    rate_limit_enabled: bool = True
+    rate_limit_window_seconds: int = 900
+    rate_limit_login: int = 30
+    rate_limit_register: int = 10
+    rate_limit_password_reset: int = 10
+    rate_limit_token: int = 30
+
     smtp_host: str | None = None
     smtp_port: int = 587
     smtp_username: str | None = None
