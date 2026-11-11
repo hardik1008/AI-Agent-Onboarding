@@ -126,7 +126,7 @@ def build_email(template: str, user: User, token: str) -> OutgoingEmail:
         )
     elif template == "invite":
         subject = "You have been invited to PolicyNest"
-        url = f"{base}/accept-invite?token={token}"
+        url = f"{base}/reset-password?token={token}"
         text, html = _layout(
             "Set up your PolicyNest account",
             f"Hi {user.full_name}, an administrator created a {user.role.name} account for you.",
