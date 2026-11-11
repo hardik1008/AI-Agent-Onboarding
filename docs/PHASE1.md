@@ -5,12 +5,12 @@
 | Criterion | Status | Evidence |
 | --- | --- | --- |
 | Application starts successfully | Met | `docker compose up --build`; local uvicorn + `next dev`; `/health` |
-| Database connects and migrations execute | Met | Alembic `0001_foundation`; `/health/ready` reports `migrations_current: true`; `alembic check` clean |
+| Database connects and migrations execute | Met | Alembic `0001_foundation`, `0002_rate_limits`; `/health/ready` reports `migrations_current: true`; `alembic check` clean |
 | Users can register and log in | Met | `/register`, `/login`; `tests/test_auth.py` |
 | Protected pages require authentication | Met | Next middleware redirects `/app/*` without a session; protected layout re-checks `/auth/me`; every API route depends on `get_auth` |
 | Role permissions enforced by the backend | Met | `require_permission()` on every privileged route; `tests/test_rbac.py` |
 | Unauthorized access is rejected | Met | 401 `NOT_AUTHENTICATED` / 403 `FORBIDDEN` / 403 `CSRF_FAILED`; denials audited as `access.denied` |
-| Core tests pass | Met | backend 26 pytest tests (PostgreSQL), frontend 11 Vitest tests, lint, typecheck, build |
+| Core tests pass | Met | backend 32 pytest tests (PostgreSQL), frontend 11 Vitest tests, lint, typecheck, build; all run in GitHub Actions (`.github/workflows/ci.yml`) |
 | No hardcoded credentials or fake auth | Met | First admin created via `python -m app.cli create-admin`; secrets from env only |
 
 ## Security model
@@ -19,6 +19,7 @@
 - **Sessions:** opaque random token in an `HttpOnly`, `SameSite=Lax` cookie (`Secure` in production); only its HMAC-SHA256 is stored. 2 h idle / 12 h absolute expiry. Users can list and revoke sessions.
 - **CSRF:** per-session token in a readable cookie, required as `X-CSRF-Token` on POST/PUT/PATCH/DELETE; `Origin` must match the allow-list.
 - **Lockout:** 5 failed sign-ins lock the account for 15 minutes; admins can unlock.
+- **Rate limiting:** login, registration, forgot-password and token endpoints (verify, check, reset/invite) are limited per client IP in fixed 15-minute windows (defaults 30 / 10 / 10 / 30, `RATE_LIMIT_*`). Counters live in PostgreSQL (`rate_limit_buckets`) so every worker shares them; excess requests get `429 RATE_LIMITED` with `Retry-After`, and the first rejection per window is audited as `security.rate_limited`. Client IP comes from `X-Forwarded-For` only when `TRUST_PROXY_HEADERS=true`; in Docker Compose the nginx `proxy` service overwrites that header with the real peer address, so clients cannot spoof it and audit/session IPs are the real client rather than the frontend container.
 - **Tokens:** email verification (24 h), password reset (30 min) and staff invitation (72 h) links are single-use, stored hashed; issuing a new one invalidates older ones; password reset revokes all sessions.
 - **Account enumeration:** forgot-password always returns the same response; unknown emails spend equivalent hashing time on login.
 - **Headers:** `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, request IDs.
@@ -41,7 +42,7 @@ admin cannot be removed). Unverified applicants can only use profile permissions
 
 `audit_logs` is append-only: a PostgreSQL trigger rejects `UPDATE` and `DELETE`. Recorded events include
 registration, sign-in success/failure, lockout, logout, verification, password reset/change, session
-revocation, profile changes, all admin user changes, permission denials and CSRF rejections. Denials are
+revocation, profile changes, all admin user changes, permission denials, CSRF rejections and rate-limit rejections. Denials are
 written in an independent transaction so they persist even though the request fails. Mobile numbers and
 passwords are never logged.
 
@@ -54,7 +55,7 @@ passwords are never logged.
 
 ## Known limitations
 
-- No rate limiting at the HTTP layer yet beyond account lockout (planned: reverse-proxy / Redis limiter).
+- Rate limits are per IP only; users behind one shared NAT share a budget. With `TRUST_PROXY_HEADERS=true` the backend port must only be reachable through the trusted proxy, otherwise `X-Forwarded-For` can be spoofed.
 - Email is sent in-process via FastAPI background tasks; there is no retry queue. Failures are recorded in `email_deliveries` and visible on System status.
 - No MFA for staff accounts yet.
 - Admins cannot change a user's email address.

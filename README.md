@@ -24,8 +24,8 @@ docker compose up --build
 docker compose exec backend python -m app.cli create-admin --email you@example.com --name "Your Name"
 ```
 
-- App: http://localhost:3000
-- API docs: http://localhost:8000/api/docs (also proxied at http://localhost:3000/api/docs)
+- App: http://localhost:3000 (nginx `proxy` service: routes `/api` and `/health` to the backend, everything else to Next.js, and sets `X-Forwarded-For` to the real client address)
+- API docs: http://localhost:3000/api/docs (direct backend port http://localhost:8000 is bound to localhost for debugging)
 - Mailpit (captures verification / reset / invite emails): http://localhost:8025
 
 The backend container runs `alembic upgrade head` before starting.
@@ -59,6 +59,8 @@ TEST_DATABASE_URL=postgresql+psycopg://policynest:<pw>@localhost:5432/policynest
 cd frontend
 npm run lint && npm run typecheck && npm test && npm run build
 ```
+
+CI (`.github/workflows/ci.yml`) runs all of the above on every pull request and push to `master`.
 
 ## Configuration
 
