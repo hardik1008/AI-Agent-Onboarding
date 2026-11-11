@@ -10,7 +10,7 @@
 | Protected pages require authentication | Met | Next middleware redirects `/app/*` without a session; protected layout re-checks `/auth/me`; every API route depends on `get_auth` |
 | Role permissions enforced by the backend | Met | `require_permission()` on every privileged route; `tests/test_rbac.py` |
 | Unauthorized access is rejected | Met | 401 `NOT_AUTHENTICATED` / 403 `FORBIDDEN` / 403 `CSRF_FAILED`; denials audited as `access.denied` |
-| Core tests pass | Met | backend 32 pytest tests (PostgreSQL), frontend 11 Vitest tests, lint, typecheck, build; all run in GitHub Actions (`.github/workflows/ci.yml`) |
+| Core tests pass | Met | backend 34 pytest tests (PostgreSQL), frontend 11 Vitest tests, lint, typecheck, build; all run in GitHub Actions (`.github/workflows/ci.yml`) |
 | No hardcoded credentials or fake auth | Met | First admin created via `python -m app.cli create-admin`; secrets from env only |
 
 ## Security model

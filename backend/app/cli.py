@@ -6,6 +6,7 @@ import os
 import sys
 import uuid
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import select
 
 from app.core.db import get_sessionmaker
@@ -28,8 +29,16 @@ def _read_password(email: str, name: str) -> str:
     return password
 
 
+def _validate_email(email: str) -> str:
+    """Apply the same validation as the sign-in API so the account can actually log in."""
+    try:
+        return TypeAdapter(EmailStr).validate_python(email.strip()).lower()
+    except ValidationError as exc:
+        sys.exit(f"Invalid email address: {exc.errors()[0]['msg']}")
+
+
 def create_admin(email: str, name: str) -> None:
-    email = email.strip().lower()
+    email = _validate_email(email)
     name = normalize_name(name)
     with get_sessionmaker()() as db:
         if db.scalar(select(User).where(User.email == email)):

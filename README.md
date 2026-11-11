@@ -21,7 +21,7 @@ kept unchanged in [`legacy/`](legacy/) for reference while its useful pieces are
 ```bash
 cp .env.example .env            # then set POSTGRES_PASSWORD and SECRET_KEY (openssl rand -base64 48)
 docker compose up --build
-docker compose exec backend python -m app.cli create-admin --email you@example.com --name "Your Name"
+docker compose exec backend python -m app.cli create-admin --email you@yourcompany.com --name "Your Name"
 ```
 
 - App: http://localhost:3000 (nginx `proxy` service: routes `/api` and `/health` to the backend, everything else to Next.js, and sets `X-Forwarded-For` to the real client address)
@@ -39,7 +39,7 @@ cd backend
 python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 # backend/.env: DATABASE_URL=postgresql+psycopg://policynest:<pw>@localhost:5432/policynest, SECRET_KEY=..., SMTP_HOST=localhost, SMTP_PORT=1025
 .venv/bin/alembic upgrade head
-.venv/bin/python -m app.cli create-admin --email you@example.com --name "Your Name"
+.venv/bin/python -m app.cli create-admin --email you@yourcompany.com --name "Your Name"
 .venv/bin/uvicorn app.main:app --reload --port 8000
 
 cd ../frontend
