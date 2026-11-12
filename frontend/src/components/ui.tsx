@@ -89,7 +89,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
 });
 
 export function Card({ className, children }: { className?: string; children: React.ReactNode }) {
-  return <div className={clsx("rounded-xl border border-slate-200 bg-white shadow-sm", className)}>{children}</div>;
+  return <div className={clsx("min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm", className)}>{children}</div>;
 }
 
 export function CardHeader({ title, description, action }: { title: string; description?: string; action?: React.ReactNode }) {

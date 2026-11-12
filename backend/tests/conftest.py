@@ -62,7 +62,8 @@ def clean_tables(migrated_db):
     with get_engine().begin() as conn:
         conn.execute(
             text(
-                "TRUNCATE users, user_sessions, user_action_tokens, email_deliveries, audit_logs RESTART IDENTITY CASCADE"
+                "TRUNCATE users, user_sessions, user_action_tokens, email_deliveries, audit_logs, rate_limit_buckets "
+                "RESTART IDENTITY CASCADE"
             )
         )
 

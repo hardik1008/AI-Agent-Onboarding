@@ -49,6 +49,7 @@ from app.services.auth import (
     set_auth_cookies,
 )
 from app.services.email import get_provider, queue_email
+from app.services.rate_limit import limit_by_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -84,7 +85,12 @@ def auth_config() -> dict:
     }
 
 
-@router.post("/register", response_model=AuthResult, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=AuthResult,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_by_ip("register", "rate_limit_register"))],
+)
 def register(body: RegisterRequest, request: Request, response: Response, db: DB, background: BackgroundTasks):
     email = body.email.lower()
     if _user_by_email(db, email):
@@ -123,7 +129,7 @@ def register(body: RegisterRequest, request: Request, response: Response, db: DB
     return _auth_result(user, delivery)
 
 
-@router.post("/login", response_model=AuthResult)
+@router.post("/login", response_model=AuthResult, dependencies=[Depends(limit_by_ip("login", "rate_limit_login"))])
 def login(body: LoginRequest, request: Request, response: Response, db: DB):
     s = get_settings()
     email = body.email.lower()
@@ -194,7 +200,7 @@ def me(auth: CurrentAuth):
     )
 
 
-@router.post("/verify-email", response_model=Message)
+@router.post("/verify-email", response_model=Message, dependencies=[Depends(limit_by_ip("token", "rate_limit_token"))])
 def verify_email(body: TokenRequest, request: Request, db: DB):
     token = consume_action_token(db, body.token, {PURPOSE_EMAIL_VERIFY})
     user = token.user
@@ -224,7 +230,12 @@ def resend_verification(
     return EmailDispatchResult(message="Verification email requested.", email_delivery=delivery)
 
 
-@router.post("/forgot-password", response_model=Message, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/forgot-password",
+    response_model=Message,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(limit_by_ip("password_reset", "rate_limit_password_reset"))],
+)
 def forgot_password(body: EmailRequest, request: Request, db: DB, background: BackgroundTasks):
     s = get_settings()
     user = _user_by_email(db, body.email)
@@ -248,13 +259,19 @@ def forgot_password(body: EmailRequest, request: Request, db: DB, background: Ba
     return generic
 
 
-@router.post("/check-token", summary="Check whether a reset/invite/verify link is still usable")
+@router.post(
+    "/check-token",
+    summary="Check whether a reset/invite/verify link is still usable",
+    dependencies=[Depends(limit_by_ip("token", "rate_limit_token"))],
+)
 def check_token(body: TokenRequest, db: DB) -> dict:
     token = peek_action_token(db, body.token, {PURPOSE_PASSWORD_RESET, PURPOSE_INVITE, PURPOSE_EMAIL_VERIFY})
     return {"valid": True, "purpose": token.purpose, "email": token.user.email, "full_name": token.user.full_name}
 
 
-@router.post("/reset-password", response_model=Message)
+@router.post(
+    "/reset-password", response_model=Message, dependencies=[Depends(limit_by_ip("token", "rate_limit_token"))]
+)
 def reset_password(body: ResetPasswordRequest, request: Request, db: DB):
     token = peek_action_token(db, body.token, {PURPOSE_PASSWORD_RESET, PURPOSE_INVITE})
     user = token.user
